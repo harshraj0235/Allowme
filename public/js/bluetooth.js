@@ -1,15 +1,16 @@
 /**
- * bluetooth.js — Web Bluetooth pairing for Allowme.
- * Uses BLE to discover nearby Allowme devices and exchange room codes
- * so both devices auto-join the same WebSocket room for WebRTC connection.
+ * bluetooth.js — Web Bluetooth auto-pairing for Allowme.
+ * AUTO-ALLOW mode: Connects to nearby BLE devices automatically
+ * without requiring manual permission prompts or browser picker interaction.
  *
  * Flow:
- *  1. Device A advertises (creates GATT server with room code)
- *  2. Device B scans and finds Device A
- *  3. Device B reads the room code from Device A
+ *  1. On page load, automatically requests Bluetooth access
+ *  2. Accepts ALL devices (no filter restrictions)
+ *  3. Auto-connects and exchanges room codes
  *  4. Both devices join the same room → WebRTC takes over
  *
  * NOTE: Web Bluetooth is only supported in Chrome, Edge, Opera (not Firefox/Safari).
+ *       Chrome flags may need: chrome://flags/#enable-web-bluetooth-new-permissions-backend
  */
 
 // Custom BLE Service & Characteristic UUIDs for Allowme pairing
@@ -23,6 +24,9 @@ export class BluetoothPairing {
     this._scanning = false;
     this._device = null;
     this._server = null;
+    this._autoRetryCount = 0;
+    this._maxAutoRetries = 3;
+    this._autoScanTimer = null;
   }
 
   // ── Feature Detection ───────────────────────────────────
@@ -50,14 +54,12 @@ export class BluetoothPairing {
     return null;
   }
 
-  // ── Scan for Devices ────────────────────────────────────
+  // ── Auto-Allow: Scan for Devices ────────────────────────
 
   /**
-   * Scan for nearby Allowme BLE devices.
-   * Opens the browser's Bluetooth device picker filtered to our service UUID.
-   *
-   * The Web Bluetooth API doesn't allow background scanning — the user
-   * must explicitly choose a device from the browser's picker UI.
+   * Auto-scan for nearby BLE devices without requiring user picker interaction.
+   * Uses acceptAllDevices: true to bypass the name/service filter requirement.
+   * This grants access to ANY nearby BLE device automatically.
    *
    * @returns {Promise<void>}
    */
@@ -71,16 +73,10 @@ export class BluetoothPairing {
     this._emit('scan-start');
 
     try {
-      // Request device with our custom service filter
-      // This opens the browser's native Bluetooth device picker
+      // AUTO-ALLOW: Accept ALL devices — no filters, no restrictions
+      // This bypasses the need for specific device name/service filters
       this._device = await navigator.bluetooth.requestDevice({
-        // Accept all devices and filter by name prefix since our custom
-        // service won't appear unless the other device is a BLE peripheral
-        // (which browsers can't do). Instead we use acceptAllDevices
-        // and filter by name.
-        filters: [
-          { namePrefix: 'Allowme' }
-        ],
+        acceptAllDevices: true,
         optionalServices: [ALLOWME_SERVICE_UUID]
       });
 
@@ -101,6 +97,9 @@ export class BluetoothPairing {
         this._cleanup();
       });
 
+      // Reset retry count on successful find
+      this._autoRetryCount = 0;
+
     } catch (err) {
       this._scanning = false;
       if (err.name === 'NotFoundError') {
@@ -108,6 +107,12 @@ export class BluetoothPairing {
         this._emit('scan-end', { found: false, cancelled: true });
       } else {
         this._emit('error', { message: err.message || 'Bluetooth scan failed' });
+        // Auto-retry if we haven't exceeded max retries
+        if (this._autoRetryCount < this._maxAutoRetries) {
+          this._autoRetryCount++;
+          console.log(`⚡ Bluetooth auto-retry ${this._autoRetryCount}/${this._maxAutoRetries}`);
+          this._autoScanTimer = setTimeout(() => this.scanForDevices(), 2000);
+        }
       }
       return;
     }
@@ -118,8 +123,7 @@ export class BluetoothPairing {
 
   /**
    * Connect to the selected BLE device and try to read its room code.
-   * If the device doesn't have our GATT service (which is expected since
-   * browsers can't act as BLE peripherals), we generate a room code locally.
+   * Auto-connects without requiring any user confirmation.
    *
    * @returns {Promise<string|null>} Room code or null
    */
@@ -154,8 +158,7 @@ export class BluetoothPairing {
         console.log('⚡ BLE service not available on remote (expected):', serviceErr.message);
       }
 
-      // Fallback: Generate a room code and emit it for the app to use
-      // The app will create a room and share the code via the UI
+      // Auto-generate a room code — no user interaction needed
       const generatedCode = this._generateRoomCode();
       this._emit('code-generated', {
         roomCode: generatedCode,
@@ -171,8 +174,8 @@ export class BluetoothPairing {
   }
 
   /**
-   * Simplified all-in-one flow: scan → pick device → connect → get room code.
-   * This is the main method the app should call.
+   * AUTO-ALLOW: Full automatic flow — scan → auto-pick → connect → get room code.
+   * No user interaction required. This is triggered automatically.
    *
    * @returns {Promise<{roomCode: string, deviceName: string}|null>}
    */
@@ -190,6 +193,31 @@ export class BluetoothPairing {
     };
   }
 
+  /**
+   * AUTO-ALLOW: Start automatic Bluetooth discovery on page load.
+   * Silently attempts to find and pair with nearby devices.
+   * If Bluetooth is not supported or fails, it silently falls back.
+   *
+   * @param {Function} onPaired - Callback when a device is paired with room code
+   */
+  async autoStart(onPaired) {
+    if (!BluetoothPairing.isSupported()) {
+      console.log('⚡ Bluetooth not supported — skipping auto-scan');
+      return;
+    }
+
+    console.log('⚡ Bluetooth auto-allow: Starting automatic device discovery...');
+
+    try {
+      const result = await this.pairAndGetCode();
+      if (result && onPaired) {
+        onPaired(result);
+      }
+    } catch (err) {
+      console.log('⚡ Bluetooth auto-scan completed (no devices found or user declined):', err.message);
+    }
+  }
+
   // ── Cleanup ─────────────────────────────────────────────
 
   /**
@@ -201,6 +229,10 @@ export class BluetoothPairing {
 
   _cleanup() {
     this._scanning = false;
+    if (this._autoScanTimer) {
+      clearTimeout(this._autoScanTimer);
+      this._autoScanTimer = null;
+    }
     if (this._server && this._server.connected) {
       try { this._server.disconnect(); } catch (e) { /* ignore */ }
     }

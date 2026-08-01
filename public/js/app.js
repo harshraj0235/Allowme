@@ -57,6 +57,10 @@ class AllowmeApp {
 
     // Bluetooth
     this._bluetooth = new BluetoothPairing();
+    this._pendingPairRequest = null; // { from, deviceInfo }
+    this._pairRequestTimer = null;
+    this._pairRequestTimeout = 30000; // 30 seconds to accept
+    this._waitingForPairResponse = null; // peerId we're waiting response from
 
     this.dom = {};
     this._cacheDom();
@@ -111,6 +115,9 @@ class AllowmeApp {
       'btUnsupported', 'btUnsupportedReason', 'btScanSection',
       'btStatus', 'btStatusIcon', 'btStatusText',
       'btScanAnim', 'btDeviceCard', 'btDeviceName', 'btDeviceStatus', 'btScanBtn', 'btScanBtnText', 'btSubtitle',
+      // BT Pairing Notification
+      'btPairNotification', 'btPairDeviceEmoji', 'btPairDeviceName', 'btPairDeviceDetail',
+      'btPairTimerBar', 'btPairAcceptBtn', 'btPairRejectBtn',
       'toastContainer',
       // Quality
       'qualityBar', 'qualitySpeed', 'qualityRtt', 'qualityChunk',
@@ -127,6 +134,7 @@ class AllowmeApp {
     this._loadTheme();
     this._setupUI();
     this._setupSignaling();
+    this._setupBtPairing();
     await this._initHistoryDB();
 
     try {
@@ -170,6 +178,10 @@ class AllowmeApp {
     this.signaling.on('peer-joined', (msg) => this._addPeer(msg));
     this.signaling.on('peer-left', (msg) => this._removePeer(msg.peerId));
     this.signaling.on('signal', (msg) => this._handleIncomingSignal(msg));
+
+    // Bluetooth pairing via signaling
+    this.signaling.on('bt-pair-request', (msg) => this._onBtPairRequest(msg));
+    this.signaling.on('bt-pair-response', (msg) => this._onBtPairResponse(msg));
 
     this.signaling.on('room-created', (msg) => {
       this.dom.generatedRoomCode.textContent = msg.roomCode;
@@ -374,10 +386,15 @@ class AllowmeApp {
     el.className = `peer-device peer-pos-${this.peerPositionIndex % 6}`;
     el.dataset.peerId = msg.peerId;
     el.innerHTML = `
-      <div class="peer-avatar">${getDeviceEmoji(msg.deviceInfo)}</div>
+      <div class="peer-avatar" style="position:relative;">
+        ${getDeviceEmoji(msg.deviceInfo)}
+        <div class="peer-bt-badge" title="Bluetooth Pairing">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"/></svg>
+        </div>
+      </div>
       <div class="peer-name">${msg.deviceInfo?.name || 'Device'}</div>
     `;
-    el.addEventListener('click', () => this._connectToPeer(msg.peerId));
+    el.addEventListener('click', () => this._requestBtPair(msg.peerId));
     this.dom.radarContainer.appendChild(el);
     this.peerPositionIndex++;
   }
@@ -387,6 +404,197 @@ class AllowmeApp {
     this.dom.radarContainer?.querySelector(`[data-peer-id="${peerId}"]`)?.remove();
     if (this.peers.size === 0) this.dom.noPeers.style.display = '';
     if (this.connectedPeerId === peerId) this._disconnect();
+    // Clear waiting state if peer left
+    if (this._waitingForPairResponse === peerId) {
+      this._waitingForPairResponse = null;
+      this._toast('warning', 'Device disconnected before responding');
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // BLUETOOTH PAIRING FLOW (Request → Accept → Connect)
+  // ═══════════════════════════════════════════════════════════
+
+  /**
+   * Step 1: User clicks a device → send Bluetooth pairing request.
+   */
+  _requestBtPair(peerId) {
+    if (this.connections.has(peerId)) return;
+    if (this._waitingForPairResponse) {
+      this._toast('warning', 'Already waiting for a pairing response...');
+      return;
+    }
+
+    this.selectedPeerId = peerId;
+    this._waitingForPairResponse = peerId;
+
+    // UI: show waiting state on clicked device
+    const el = this.dom.radarContainer?.querySelector(`[data-peer-id="${peerId}"]`);
+    this.dom.radarContainer?.querySelectorAll('.peer-device').forEach(p => {
+      p.classList.remove('selected', 'waiting');
+      p.querySelector('.peer-waiting-label')?.remove();
+    });
+    el?.classList.add('selected', 'waiting');
+    const waitLabel = document.createElement('div');
+    waitLabel.className = 'peer-waiting-label';
+    waitLabel.textContent = 'Requesting...';
+    el?.appendChild(waitLabel);
+
+    // Send pairing request via signaling server
+    this.signaling.send({ type: 'bt-pair-request', targetId: peerId });
+    this._toast('info', 'Sending pairing request...');
+    this._vibrate([50, 30, 50]);
+
+    // Auto-timeout after 30s
+    this._pairResponseTimeout = setTimeout(() => {
+      if (this._waitingForPairResponse === peerId) {
+        this._waitingForPairResponse = null;
+        el?.classList.remove('waiting');
+        el?.querySelector('.peer-waiting-label')?.remove();
+        this._toast('warning', 'Pairing request timed out');
+      }
+    }, this._pairRequestTimeout);
+  }
+
+  /**
+   * Step 2: Receiving device gets pairing request → show accept/reject notification.
+   */
+  _onBtPairRequest(msg) {
+    // Store pending request
+    this._pendingPairRequest = { from: msg.from, deviceInfo: msg.deviceInfo };
+
+    // Show notification
+    const emoji = getDeviceEmoji(msg.deviceInfo);
+    const name = msg.deviceInfo?.name || 'Unknown Device';
+    const browser = msg.deviceInfo?.browser || '';
+
+    this.dom.btPairDeviceEmoji.textContent = emoji;
+    this.dom.btPairDeviceName.textContent = `${name} · ${browser}`.trim();
+    this.dom.btPairDeviceDetail.textContent = 'wants to connect with you via Bluetooth';
+    this.dom.btPairTimerBar.style.width = '100%';
+    this.dom.btPairNotification.classList.add('visible');
+
+    // Vibrate + sound for incoming request
+    this._vibrate([100, 50, 100, 50, 100]);
+    this._playPairSound();
+
+    // Start countdown timer bar
+    let remaining = this._pairRequestTimeout;
+    const interval = 300;
+    if (this._pairRequestTimer) clearInterval(this._pairRequestTimer);
+    this._pairRequestTimer = setInterval(() => {
+      remaining -= interval;
+      const pct = Math.max(0, (remaining / this._pairRequestTimeout) * 100);
+      this.dom.btPairTimerBar.style.width = pct + '%';
+      if (remaining <= 0) {
+        this._dismissPairNotification(false);
+      }
+    }, interval);
+  }
+
+  /**
+   * Step 3: Requesting device gets accept/reject response.
+   */
+  _onBtPairResponse(msg) {
+    if (this._waitingForPairResponse !== msg.from) return;
+
+    clearTimeout(this._pairResponseTimeout);
+    this._waitingForPairResponse = null;
+
+    const el = this.dom.radarContainer?.querySelector(`[data-peer-id="${msg.from}"]`);
+    el?.classList.remove('waiting');
+    el?.querySelector('.peer-waiting-label')?.remove();
+
+    if (msg.accepted) {
+      this._toast('success', 'Pairing accepted! Connecting...');
+      this._vibrate([50, 50, 50]);
+      // Now do the actual WebRTC connection
+      this._connectToPeer(msg.from);
+    } else {
+      this._toast('error', 'Pairing request was rejected');
+      el?.classList.remove('selected');
+    }
+  }
+
+  /**
+   * Setup the accept/reject button handlers for the notification popup.
+   */
+  _setupBtPairing() {
+    this.dom.btPairAcceptBtn?.addEventListener('click', () => {
+      this._respondToPairRequest(true);
+    });
+    this.dom.btPairRejectBtn?.addEventListener('click', () => {
+      this._respondToPairRequest(false);
+    });
+  }
+
+  /**
+   * Respond to an incoming pairing request.
+   */
+  _respondToPairRequest(accepted) {
+    if (!this._pendingPairRequest) return;
+
+    const { from } = this._pendingPairRequest;
+
+    // Send response back via signaling
+    this.signaling.send({ type: 'bt-pair-response', targetId: from, accepted });
+
+    // Dismiss notification
+    this._dismissPairNotification(accepted);
+
+    if (accepted) {
+      this._toast('success', 'Pairing accepted! Connecting...');
+      this._vibrate([50, 50, 50]);
+      // Start WebRTC connection from this side too
+      this._connectToPeer(from);
+    } else {
+      this._toast('info', 'Pairing request rejected');
+    }
+  }
+
+  /**
+   * Dismiss the pairing notification popup.
+   */
+  _dismissPairNotification(wasAccepted) {
+    if (this._pairRequestTimer) {
+      clearInterval(this._pairRequestTimer);
+      this._pairRequestTimer = null;
+    }
+
+    this.dom.btPairNotification?.classList.remove('visible');
+
+    if (!wasAccepted && this._pendingPairRequest) {
+      // Auto-reject if timed out
+      this.signaling.send({
+        type: 'bt-pair-response',
+        targetId: this._pendingPairRequest.from,
+        accepted: false
+      });
+    }
+
+    this._pendingPairRequest = null;
+  }
+
+  /**
+   * Play a distinctive sound for incoming pairing requests.
+   */
+  _playPairSound() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      // Two-tone chime
+      [0, 0.15].forEach((delay, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(i === 0 ? 660 : 880, ctx.currentTime + delay);
+        gain.gain.setValueAtTime(0.12, ctx.currentTime + delay);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.25);
+        osc.start(ctx.currentTime + delay);
+        osc.stop(ctx.currentTime + delay + 0.25);
+      });
+    } catch {}
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -397,8 +605,9 @@ class AllowmeApp {
     if (this.connections.has(peerId)) return;
     this.selectedPeerId = peerId;
     const el = this.dom.radarContainer?.querySelector(`[data-peer-id="${peerId}"]`);
-    this.dom.radarContainer?.querySelectorAll('.peer-device').forEach(p => p.classList.remove('selected'));
+    this.dom.radarContainer?.querySelectorAll('.peer-device').forEach(p => p.classList.remove('selected', 'waiting'));
     el?.classList.add('selected');
+    el?.querySelector('.peer-waiting-label')?.remove();
     this._toast('info', 'Connecting...');
 
     const pc = new PeerConnection(this.iceServers);

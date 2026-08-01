@@ -447,6 +447,39 @@
   </div>
 </div>
 
+<!-- Bluetooth Pairing Request Notification -->
+<div id="btPairNotification" class="bt-pair-notification">
+  <div class="bt-pair-card glass-card">
+    <div class="bt-pair-pulse-ring"></div>
+    <div class="bt-pair-header">
+      <div class="bt-pair-icon">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"/></svg>
+      </div>
+      <div class="bt-pair-title">Bluetooth Pairing Request</div>
+    </div>
+    <div class="bt-pair-device-info">
+      <div class="bt-pair-device-emoji" id="btPairDeviceEmoji">🖥️</div>
+      <div>
+        <div class="bt-pair-device-name" id="btPairDeviceName">Unknown Device</div>
+        <div class="bt-pair-device-detail" id="btPairDeviceDetail">wants to connect with you</div>
+      </div>
+    </div>
+    <div class="bt-pair-timer">
+      <div class="bt-pair-timer-bar" id="btPairTimerBar"></div>
+    </div>
+    <div class="bt-pair-actions">
+      <button id="btPairRejectBtn" class="bt-pair-btn reject">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        Reject
+      </button>
+      <button id="btPairAcceptBtn" class="bt-pair-btn accept">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+        Accept
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- Toasts -->
 <div id="toastContainer" class="toast-container"></div>
 

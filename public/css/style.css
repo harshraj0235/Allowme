@@ -550,3 +550,213 @@ body {
 
 /* ── Bluetooth button hidden state ───────────────────── */
 .pair-btn.bt-hidden { display:none; }
+
+/* ══════════════════════════════════════════════════════ */
+/* BLUETOOTH PAIRING REQUEST NOTIFICATION                */
+/* ══════════════════════════════════════════════════════ */
+
+.bt-pair-notification {
+  position: fixed;
+  top: -200px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3000;
+  width: calc(100% - 24px);
+  max-width: 420px;
+  transition: top 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+.bt-pair-notification.visible {
+  top: 16px;
+  pointer-events: auto;
+}
+
+.bt-pair-card {
+  position: relative;
+  padding: 20px;
+  border-radius: var(--radius-xl) !important;
+  overflow: hidden;
+  box-shadow: 0 8px 40px rgba(0, 150, 255, 0.25), 0 0 60px rgba(0, 150, 255, 0.08);
+  animation: btPairShake 0.6s ease;
+}
+@keyframes btPairShake {
+  0%,100% { transform: translateX(0); }
+  15% { transform: translateX(-6px); }
+  30% { transform: translateX(5px); }
+  45% { transform: translateX(-4px); }
+  60% { transform: translateX(3px); }
+  75% { transform: translateX(-1px); }
+}
+
+.bt-pair-pulse-ring {
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 150, 255, 0.08) 0%, transparent 70%);
+  animation: btNotifPulse 2s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes btNotifPulse {
+  0%, 100% { transform: scale(0.8); opacity: 0.5; }
+  50% { transform: scale(1); opacity: 1; }
+}
+
+.bt-pair-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.bt-pair-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0096ff 0%, #5b5bf7 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  flex-shrink: 0;
+  box-shadow: 0 4px 16px rgba(0, 150, 255, 0.4);
+  animation: btIconPulse 1.5s ease-in-out infinite;
+}
+@keyframes btIconPulse {
+  0%, 100% { box-shadow: 0 4px 16px rgba(0, 150, 255, 0.4); }
+  50% { box-shadow: 0 4px 24px rgba(0, 150, 255, 0.7), 0 0 40px rgba(0, 150, 255, 0.2); }
+}
+.bt-pair-title {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: 0.3px;
+}
+
+.bt-pair-device-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: rgba(0, 150, 255, 0.06);
+  border: 1px solid rgba(0, 150, 255, 0.15);
+  margin-bottom: 12px;
+}
+.bt-pair-device-emoji {
+  font-size: 1.8rem;
+  flex-shrink: 0;
+}
+.bt-pair-device-name {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.bt-pair-device-detail {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.bt-pair-timer {
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.06);
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+[data-theme="light"] .bt-pair-timer { background: rgba(0, 0, 0, 0.06); }
+.bt-pair-timer-bar {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #0096ff, #5b5bf7);
+  width: 100%;
+  transition: width 0.3s linear;
+}
+
+.bt-pair-actions {
+  display: flex;
+  gap: 10px;
+}
+.bt-pair-btn {
+  flex: 1;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  border: none;
+  font-family: var(--font-family);
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all var(--transition-base);
+}
+.bt-pair-btn.reject {
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
+  color: var(--error);
+}
+.bt-pair-btn.reject:hover {
+  background: var(--error);
+  color: white;
+  transform: translateY(-1px);
+}
+.bt-pair-btn.accept {
+  background: linear-gradient(135deg, #0096ff 0%, #5b5bf7 100%);
+  color: white;
+  box-shadow: 0 4px 16px rgba(0, 150, 255, 0.3);
+}
+.bt-pair-btn.accept:hover {
+  box-shadow: 0 6px 24px rgba(0, 150, 255, 0.5);
+  transform: translateY(-1px);
+}
+
+/* ── Peer Bluetooth Badge (on radar devices) ─────────── */
+.peer-bt-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0096ff 0%, #5b5bf7 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 150, 255, 0.4);
+  animation: btBadgePulse 2s ease-in-out infinite;
+  z-index: 4;
+}
+.peer-bt-badge svg { width: 10px; height: 10px; color: white; }
+@keyframes btBadgePulse {
+  0%, 100% { box-shadow: 0 2px 8px rgba(0, 150, 255, 0.4); }
+  50% { box-shadow: 0 2px 14px rgba(0, 150, 255, 0.7); }
+}
+
+/* ── Peer Waiting State (after clicking, waiting for acceptance) ── */
+.peer-device.waiting .peer-avatar {
+  border-color: rgba(0, 150, 255, 0.6);
+  box-shadow: 0 0 0 3px rgba(0, 150, 255, 0.15), 0 4px 16px rgba(0, 150, 255, 0.3);
+  animation: peerWaiting 1.5s ease-in-out infinite;
+}
+@keyframes peerWaiting {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(0, 150, 255, 0.15), 0 4px 16px rgba(0, 150, 255, 0.3); }
+  50% { box-shadow: 0 0 0 6px rgba(0, 150, 255, 0.08), 0 4px 24px rgba(0, 150, 255, 0.5); }
+}
+.peer-device.waiting .peer-name {
+  color: rgba(0, 150, 255, 0.9);
+}
+.peer-waiting-label {
+  font-size: 0.55rem;
+  font-weight: 700;
+  color: rgba(0, 150, 255, 0.9);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  animation: blink 1s step-end infinite;
+}
+@keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
