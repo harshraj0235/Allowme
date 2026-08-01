@@ -546,8 +546,13 @@ class AllowmeApp {
     if (accepted) {
       this._toast('success', 'Pairing accepted! Connecting...');
       this._vibrate([50, 50, 50]);
-      // Start WebRTC connection from this side too
-      this._connectToPeer(from);
+      
+      // Do NOT call _connectToPeer here to avoid WebRTC Glare (colliding offers).
+      // The requester will send the offer. We just prepare the UI.
+      this.selectedPeerId = from;
+      const el = this.dom.radarContainer?.querySelector(`[data-peer-id="${from}"]`);
+      this.dom.radarContainer?.querySelectorAll('.peer-device').forEach(p => p.classList.remove('selected', 'waiting'));
+      el?.classList.add('selected');
     } else {
       this._toast('info', 'Pairing request rejected');
     }
