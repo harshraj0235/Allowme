@@ -1,0 +1,24 @@
+{
+  "name": "allowme",
+  "version": "1.0.0",
+  "description": "Allowme — Share any file instantly between any device. No app install needed.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "file-sharing",
+    "webrtc",
+    "p2p",
+    "cross-platform",
+    "allowme"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.21.0",
+    "express-rate-limit": "^8.6.1",
+    "puppeteer": "^25.4.0",
+    "ws": "^8.18.0"
+  }
+}

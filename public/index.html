@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Allowme ⚡ — Share Files Instantly Between Any Device</title>
+  <meta name="description" content="Share any file instantly between Android, iPhone, PC, Mac — anywhere in the world. No app install needed.">
+  <meta name="theme-color" content="#0f1923">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<div class="app-container">
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- PAGE 1: DISCOVERY (before connection)             -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div id="discoveryPage" class="page discovery-page">
+
+    <header class="app-header">
+      <div class="header-row">
+        <h1 class="app-logo"><span class="logo-icon">⚡</span> Allowme</h1>
+        <button id="themeToggle" class="theme-toggle" title="Toggle theme"><span class="theme-icon" id="themeIcon">🌙</span></button>
+      </div>
+      <p class="app-tagline">Share any file. Any device. Anywhere in the world.</p>
+    </header>
+
+    <div id="connectionStatus" class="connection-status connecting">
+      <span class="status-dot"></span>
+      <span id="statusText">Connecting...</span>
+    </div>
+
+    <section class="discovery-section card glass-card">
+      <div class="section-header"><span class="icon">📡</span><span>Nearby Devices</span></div>
+      <div class="radar-container" id="radarContainer">
+        <div class="radar-pulse"><div class="pulse-3"></div></div>
+        <div class="radar-center">
+          <span class="you-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+          <span class="you-label">You</span>
+        </div>
+      </div>
+      <div id="noPeers" class="no-peers">
+        <div>Looking for devices...</div>
+        <div class="hint">Open this page on another device or use a Room Code</div>
+      </div>
+    </section>
+
+    <div class="pairing-actions">
+      <button id="qrBtn" class="pair-btn glass-btn"><span class="btn-icon">📱</span><span>QR Code</span></button>
+      <button id="roomBtn" class="pair-btn glass-btn"><span class="btn-icon">🔑</span><span>Room Code</span></button>
+      <button id="bluetoothBtn" class="pair-btn glass-btn"><span class="btn-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"/></svg>
+      </span><span>Bluetooth</span></button>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- SUCCESS POPUP (shown when connected)              -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div id="successPopup" class="success-popup-overlay">
+    <div class="success-popup glass-card">
+      <div class="success-anim">
+        <div class="success-circle">
+          <svg class="success-check" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#4caf50" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </div>
+      </div>
+      <div class="success-title">Connected!</div>
+      <div id="successPeerName" class="success-peer-name">Windows PC · Chrome</div>
+      <div id="successConnType" class="success-conn-type"><span class="badge-dot"></span> Direct P2P</div>
+      <button id="startChatBtn" class="success-start-btn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        Start Sharing
+      </button>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════ -->
+  <!-- PAGE 2: CONNECTED EXPERIENCE (tabs)               -->
+  <!-- ══════════════════════════════════════════════════ -->
+  <div id="connectedPage" class="page connected-page">
+
+    <!-- Connected Header -->
+    <div class="connected-header">
+      <div class="connected-info">
+        <div class="connected-avatar" id="connectedAvatar">🖥️</div>
+        <div>
+          <div id="connHeaderName" class="conn-header-name">Device</div>
+          <div id="connHeaderType" class="conn-header-type"><span class="badge-dot-sm"></span> Direct P2P</div>
+        </div>
+      </div>
+      <div class="connected-header-actions">
+        <div id="e2eeIndicator" class="e2ee-indicator" title="End-to-End Encrypted">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <span>E2EE</span>
+        </div>
+        <button id="themeToggle2" class="theme-toggle sm" title="Toggle theme"><span class="theme-icon" id="themeIcon2">🌙</span></button>
+        <button id="disconnectBtn" class="disconnect-btn-sm">✕</button>
+      </div>
+    </div>
+
+    <!-- Bottom Navigation Bar -->
+    <nav class="bottom-nav" id="bottomNav">
+      <button class="nav-btn active" data-tab="chat" id="tabChat">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span class="nav-label">Chat</span>
+        <span id="chatTabBadge" class="nav-badge" style="display:none;">0</span>
+      </button>
+      <button class="nav-btn" data-tab="files" id="tabFiles">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <span class="nav-label">Files</span>
+      </button>
+      <button class="nav-btn" data-tab="call" id="tabCall">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15.05 5A5 5 0 0 1 19 8.95M15.05 1A9 9 0 0 1 23 8.94M22 16.92v3a2 2 0 0 1-2.18 2A19.79 19.79 0 0 1 8.91 18.4a19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 .46 1.64 2 2 0 0 1 2.43 0H5.5a2 2 0 0 1 2 1.72c.13.81.36 1.6.66 2.35a2 2 0 0 1-.45 2.11L6.09 7.8a16 16 0 0 0 6 6l1.62-1.62a2 2 0 0 1 2.11-.45c.75.3 1.54.53 2.35.66A2 2 0 0 1 22 16.92"/></svg>
+        <span class="nav-label">Call</span>
+      </button>
+      <button class="nav-btn" id="moreBtn">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+        <span class="nav-label">More</span>
+      </button>
+    </nav>
+
+    <!-- More Panel (slide-up) -->
+    <div class="more-panel-overlay" id="morePanelOverlay"></div>
+    <div class="more-panel" id="morePanel">
+      <div class="more-panel-handle"></div>
+      <div class="more-panel-title">More Features</div>
+      <div class="more-panel-grid">
+        <button class="more-item" data-tab="screen" id="tabScreen">
+          <div class="more-item-icon">🖥️</div>
+          <div class="more-item-label">Screen Share</div>
+          <div class="more-item-desc">Share your screen live</div>
+        </button>
+        <button class="more-item" data-tab="clipboard" id="tabClipboard">
+          <div class="more-item-icon">📋</div>
+          <div class="more-item-label">Clipboard</div>
+          <div class="more-item-desc">Sync text & images</div>
+        </button>
+        <button class="more-item" data-tab="history" id="tabHistory">
+          <div class="more-item-icon">📜</div>
+          <div class="more-item-label">History</div>
+          <div class="more-item-desc">Past transfers</div>
+        </button>
+      </div>
+    </div>
+
+    <!-- ─── CHAT TAB ─────────────────────────────── -->
+    <div class="tab-content active" id="chatTab">
+      <div class="chat-container">
+        <div id="chatMessages" class="chat-messages">
+          <div class="chat-empty" id="chatEmpty">
+            <div class="chat-empty-icon">💬</div>
+            <div>No messages yet</div>
+            <div class="hint">Send a message, photo, or file!</div>
+          </div>
+        </div>
+        <div id="imagePreview" class="image-preview-bar" style="display:none;">
+          <img id="previewImg" class="preview-thumb" src="" alt="Preview">
+          <span id="previewName" class="preview-name">photo.jpg</span>
+          <button id="cancelPreview" class="preview-cancel">✕</button>
+        </div>
+        <div class="chat-input-bar">
+          <button id="cameraBtn" class="chat-action-btn" title="Take photo">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          </button>
+          <button id="imageUploadBtn" class="chat-action-btn" title="Send image">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          </button>
+          <input type="file" id="imageFileInput" accept="image/*" style="display:none;" multiple>
+          <input type="text" id="chatInput" class="chat-input" placeholder="Type a message..." autocomplete="off" maxlength="5000">
+          <button id="chatSendBtn" class="chat-send-btn" title="Send">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── FILES TAB ────────────────────────────── -->
+    <div class="tab-content" id="filesTab">
+      <div class="files-container">
+        <!-- Drop Zone -->
+        <div id="dropZone" class="drop-zone glass-card">
+          <div class="drop-icon">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </div>
+          <p class="drop-text">Drop files here or tap to select</p>
+          <p class="drop-hint">Any file type · No size limit · Photos, videos, documents, APKs</p>
+          <input type="file" id="fileInput" class="file-input" multiple>
+        </div>
+
+        <!-- Selected Files -->
+        <div id="selectedFiles" class="selected-files card glass-card">
+          <div class="section-header"><span class="icon">📎</span><span>Selected Files</span><span id="selectedCount" class="selected-count">0</span></div>
+          <div id="fileList"></div>
+        </div>
+
+        <!-- Send Button -->
+        <div id="sendBar" class="send-bar">
+          <button id="sendBtn" class="send-btn" disabled>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            <span id="sendBtnText">Select files to send</span>
+          </button>
+        </div>
+
+        <!-- Transfers -->
+        <div id="transfersSection" class="transfers-section card glass-card">
+          <div class="section-header">
+            <span class="icon">🚀</span><span>Active Transfers</span>
+            <div class="transfer-controls-header">
+              <button id="pauseAllBtn" class="control-btn" title="Pause" style="display:none;">⏸</button>
+              <button id="resumeAllBtn" class="control-btn" title="Resume" style="display:none;">▶</button>
+            </div>
+          </div>
+          <div id="transferList"></div>
+        </div>
+
+        <!-- Received -->
+        <div id="receivedSection" class="received-section card glass-card">
+          <div class="section-header"><span class="icon">📥</span><span>Received Files</span></div>
+          <div id="receivedList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── SCREEN TAB ──────────────────────────── -->
+    <div class="tab-content" id="screenTab">
+      <div class="screen-container">
+        <div id="screenPlaceholder" class="screen-placeholder">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.3;"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          <div class="screen-placeholder-text">No screen being shared</div>
+          <div class="hint">Share your screen or wait for the other device</div>
+        </div>
+        <div class="screen-video-wrapper" id="screenVideoWrapper">
+          <video id="screenVideo" class="screen-video" autoplay playsinline muted style="display:none;"></video>
+          <button id="fullscreenBtn" class="fullscreen-btn" title="Toggle Fullscreen" style="display:none;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+          </button>
+        </div>
+        <div class="screen-controls">
+          <button id="shareScreenBtn" class="share-screen-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            <span id="shareScreenText">Share My Screen</span>
+          </button>
+          <button id="stopScreenBtn" class="stop-screen-btn" style="display:none;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+            Stop Sharing
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── CALL TAB ────────────────────────────── -->
+    <div class="tab-content" id="callTab">
+      <div class="call-container">
+        <div id="callPlaceholder" class="call-placeholder">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.3;"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+          <div class="call-placeholder-text">Start a Call</div>
+          <div class="hint">Connect face-to-face or with audio only</div>
+        </div>
+        <div class="call-video-wrapper" id="callVideoWrapper" style="display:none;">
+          <video id="callRemoteVideo" class="call-remote-video" autoplay playsinline></video>
+          <video id="callLocalVideo" class="call-local-video" autoplay playsinline muted></video>
+        </div>
+        <div class="call-controls">
+          <button id="startAudioCallBtn" class="call-action-btn primary" title="Audio Call">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+            Audio Call
+          </button>
+          <button id="startVideoCallBtn" class="call-action-btn primary" title="Video Call">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+            Video Call
+          </button>
+          <button id="toggleMicBtn" class="call-action-btn secondary" style="display:none;" title="Mute/Unmute Mic">
+            <svg id="micIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          </button>
+          <button id="toggleCamBtn" class="call-action-btn secondary" style="display:none;" title="Enable/Disable Camera">
+            <svg id="camIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+          </button>
+          <button id="endCallBtn" class="call-action-btn danger" style="display:none;" title="End Call">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><line x1="23" y1="1" x2="1" y2="23"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── CLIPBOARD TAB ───────────────────────── -->
+    <div class="tab-content" id="clipboardTab">
+      <div class="clipboard-container">
+        <div class="clipboard-actions">
+          <button id="clipboardSyncBtn" class="clipboard-sync-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+            Send My Clipboard
+          </button>
+          <div class="clipboard-hint">Paste text or images here to beam them instantly</div>
+        </div>
+        <div id="clipboardPasteZone" class="clipboard-paste-zone" contenteditable="true" data-placeholder="Paste here with Ctrl+V / ⌘V..."></div>
+        <div class="clipboard-history-header">Clipboard History</div>
+        <div id="clipboardList" class="clipboard-list">
+          <div class="clipboard-empty">No clipboard items yet. Paste or send your clipboard!</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── HISTORY TAB ─────────────────────────── -->
+    <div class="tab-content" id="historyTab">
+      <div class="history-container">
+        <div class="history-header-row">
+          <div class="history-title">Transfer History</div>
+          <button id="clearHistoryBtn" class="clear-history-btn">Clear All</button>
+        </div>
+        <div id="historyList" class="history-list">
+          <div class="history-empty">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity:0.3;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <div>No transfer history yet</div>
+            <div class="hint">Your received files will appear here</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quality Bar -->
+    <div id="qualityBar" class="quality-bar" style="display:none;">
+      <div class="quality-item"><span class="quality-label">Speed</span><span id="qualitySpeed" class="quality-value">—</span></div>
+      <div class="quality-item"><span class="quality-label">Latency</span><span id="qualityRtt" class="quality-value">—</span></div>
+      <div class="quality-item"><span class="quality-label">Chunk</span><span id="qualityChunk" class="quality-value">256KB</span></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Camera Modal -->
+<div id="cameraModal" class="modal-overlay">
+  <div class="modal-content glass-card camera-modal-content" style="position:relative">
+    <button id="cameraModalClose" class="modal-close">✕</button>
+    <div class="modal-title">📷 Take Photo</div>
+    <div class="camera-preview-container">
+      <video id="cameraVideo" class="camera-video" autoplay playsinline></video>
+      <canvas id="cameraCanvas" class="camera-canvas" style="display:none;"></canvas>
+    </div>
+    <div class="camera-controls">
+      <button id="switchCameraBtn" class="camera-ctrl-btn">🔄</button>
+      <button id="captureBtn" class="capture-btn"><div class="capture-btn-inner"></div></button>
+      <button id="retakeBtn" class="camera-ctrl-btn" style="display:none;">↩️</button>
+      <button id="sendPhotoBtn" class="camera-ctrl-btn send-photo-btn" style="display:none;">✈️</button>
+    </div>
+  </div>
+</div>
+
+<!-- QR Modal -->
+<div id="qrModal" class="modal-overlay">
+  <div class="modal-content glass-card" style="position:relative">
+    <button id="qrModalClose" class="modal-close">✕</button>
+    <div class="modal-title">📱 QR Code Pairing</div>
+    <div class="modal-subtitle">Scan from another device to connect</div>
+    <div id="qrCodeContainer" class="qr-code-container"></div>
+    <div id="qrRoomCode" class="room-code-display"></div>
+    <button id="copyQrLink" class="copy-link-btn">📋 Copy Room Link</button>
+  </div>
+</div>
+
+<!-- Room Modal -->
+<div id="roomModal" class="modal-overlay">
+  <div class="modal-content glass-card" style="position:relative">
+    <button id="roomModalClose" class="modal-close">✕</button>
+    <div class="modal-title">🔑 Room Code</div>
+    <div class="modal-subtitle">Connect across any network or country</div>
+    <div id="generatedRoomCode" class="room-code-display">------</div>
+    <div class="room-btns-row">
+      <button id="newRoomBtn" class="join-btn" style="flex:1;">Generate New Code</button>
+      <button id="copyRoomCode" class="copy-link-btn">📋</button>
+    </div>
+    <div class="or-divider">or join a room</div>
+    <div class="room-code-input-group">
+      <input type="text" id="roomCodeInput" class="room-code-input" placeholder="Enter code" maxlength="6" inputmode="numeric" autocomplete="off">
+      <button id="joinRoomBtn" class="join-btn">Join</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bluetooth Modal -->
+<div id="bluetoothModal" class="modal-overlay">
+  <div class="modal-content glass-card" style="position:relative">
+    <button id="bluetoothModalClose" class="modal-close">✕</button>
+    <div class="modal-title">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle;margin-right:6px;"><polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"/></svg>
+      Bluetooth Pairing
+    </div>
+    <div class="modal-subtitle" id="btSubtitle">Find and connect to a nearby Allowme device</div>
+
+    <!-- Unsupported Warning (hidden by default) -->
+    <div id="btUnsupported" class="bt-unsupported" style="display:none;">
+      <div class="bt-unsupported-icon">⚠️</div>
+      <div class="bt-unsupported-title">Bluetooth Not Available</div>
+      <div id="btUnsupportedReason" class="bt-unsupported-reason">Your browser does not support Web Bluetooth.</div>
+      <div class="bt-unsupported-hint">Try using <strong>Chrome</strong> or <strong>Edge</strong> on a desktop or Android device.</div>
+    </div>
+
+    <!-- Scanning Section (shown when supported) -->
+    <div id="btScanSection" class="bt-scan-section">
+      <!-- Status Area -->
+      <div id="btStatus" class="bt-status">
+        <div class="bt-status-icon" id="btStatusIcon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.4;"><polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"/></svg>
+        </div>
+        <div id="btStatusText" class="bt-status-text">Ready to scan for nearby devices</div>
+      </div>
+
+      <!-- Scanning Animation -->
+      <div id="btScanAnim" class="bt-scan-anim" style="display:none;">
+        <div class="bt-scan-pulse">
+          <div class="bt-pulse-ring"></div>
+          <div class="bt-pulse-ring delay-1"></div>
+          <div class="bt-pulse-ring delay-2"></div>
+          <div class="bt-scan-center">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Device Found Card -->
+      <div id="btDeviceCard" class="bt-device-card" style="display:none;">
+        <div class="bt-device-icon">📱</div>
+        <div class="bt-device-info">
+          <div id="btDeviceName" class="bt-device-name">Device</div>
+          <div id="btDeviceStatus" class="bt-device-status">Connected via Bluetooth</div>
+        </div>
+        <div class="bt-device-check">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <button id="btScanBtn" class="bt-scan-btn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"/></svg>
+        <span id="btScanBtnText">Scan for Devices</span>
+      </button>
+
+      <div class="bt-hint">
+        Make sure the other device also has Allowme open with Bluetooth enabled
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toasts -->
+<div id="toastContainer" class="toast-container"></div>
+
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>
