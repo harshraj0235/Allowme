@@ -80,8 +80,11 @@ export class BluetoothPairing {
 
     try {
       const device = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: [ALLOWME_SERVICE_UUID, 'battery_service', 'device_information']
+        filters: [
+          { services: [ALLOWME_SERVICE_UUID] },
+          { namePrefix: 'Allowme' }
+        ],
+        optionalServices: ['battery_service', 'device_information']
       });
 
       if (!device) {
