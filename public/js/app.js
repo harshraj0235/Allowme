@@ -115,6 +115,7 @@ class AllowmeApp {
       'btUnsupported', 'btUnsupportedReason', 'btScanSection',
       'btStatus', 'btStatusIcon', 'btStatusText',
       'btScanAnim', 'btDeviceCard', 'btDeviceName', 'btDeviceStatus', 'btScanBtn', 'btScanBtnText', 'btSubtitle',
+      'btScanBtnIcon', 'btDeviceList', 'btDeviceItems', 'btDeviceBattery', 'btBatteryLevel',
       // BT Pairing Notification
       'btPairNotification', 'btPairDeviceEmoji', 'btPairDeviceName', 'btPairDeviceDetail',
       'btPairTimerBar', 'btPairAcceptBtn', 'btPairRejectBtn',
@@ -1590,135 +1591,193 @@ class AllowmeApp {
   _setupBluetooth() {
     const isSupported = BluetoothPairing.isSupported();
 
-    // Hide Bluetooth button if not supported
     if (!isSupported) {
       this.dom.bluetoothBtn?.classList.add('bt-hidden');
     }
 
-    // Bluetooth button → open modal
-    this.dom.bluetoothBtn?.addEventListener('click', () => {
-      this._openBluetoothModal();
-    });
+    this.dom.bluetoothBtn?.addEventListener('click', () => this._openBluetoothModal());
 
-    // Modal close
     this.dom.bluetoothModalClose?.addEventListener('click', () => {
       this._hideModal('bluetoothModal');
-      this._bluetooth.disconnect();
+      this._bluetooth.disconnectAll();
     });
 
-    // Scan button
-    this.dom.btScanBtn?.addEventListener('click', () => {
-      this._bluetoothScan();
-    });
+    this.dom.btScanBtn?.addEventListener('click', () => this._bluetoothScan());
 
-    // Wire up Bluetooth events
+    // Wire up new Bluetooth events
     this._bluetooth.on('scan-start', () => {
-      this.dom.btStatus.style.display = 'none';
-      this.dom.btScanAnim.style.display = 'flex';
-      this.dom.btDeviceCard.style.display = 'none';
-      this.dom.btScanBtn.disabled = true;
+      this.dom.btScanBtn.classList.add('scanning');
       this.dom.btScanBtnText.textContent = 'Scanning...';
-      this.dom.btSubtitle.textContent = 'Choose your device from the browser picker';
-    });
-
-    this._bluetooth.on('scan-end', (data) => {
-      this.dom.btScanAnim.style.display = 'none';
-      this.dom.btScanBtn.disabled = false;
-      if (!data.found) {
-        this.dom.btStatus.style.display = 'flex';
-        this.dom.btStatusText.textContent = data.cancelled ? 'Scan cancelled' : 'No device found';
-        this.dom.btScanBtnText.textContent = 'Try Again';
-        this.dom.btSubtitle.textContent = 'Find and connect to a nearby Allowme device';
+      this.dom.btStatus.style.display = 'none';
+      if (this.dom.btDeviceItems.children.length === 0) {
+        this.dom.btScanAnim.style.display = 'flex';
       }
     });
 
-    this._bluetooth.on('device-found', (data) => {
+    this._bluetooth.on('scan-end', (data) => {
+      this.dom.btScanBtn.classList.remove('scanning');
+      this.dom.btScanBtnText.textContent = 'Scan for Devices';
       this.dom.btScanAnim.style.display = 'none';
-      this.dom.btDeviceCard.style.display = 'flex';
-      this.dom.btDeviceName.textContent = data.name;
-      this.dom.btDeviceStatus.textContent = 'Connecting...';
-      this.dom.btSubtitle.textContent = 'Device found! Connecting...';
+
+      if (!data.found && this.dom.btDeviceItems.children.length === 0) {
+        this.dom.btStatus.style.display = 'flex';
+        this.dom.btStatusText.textContent = data.cancelled ? 'Scan cancelled' : 'No device found';
+      }
     });
 
-    this._bluetooth.on('connecting', () => {
-      this.dom.btDeviceStatus.textContent = 'Establishing connection...';
+    this._bluetooth.on('device-found', (deviceInfo) => {
+      this.dom.btScanAnim.style.display = 'none';
+      this.dom.btStatus.style.display = 'none';
+      this._renderBluetoothDevices();
     });
 
-    this._bluetooth.on('connected', (data) => {
-      this.dom.btDeviceStatus.textContent = 'Connected via Bluetooth';
+    this._bluetooth.on('connecting', (info) => {
+      // Update UI for specific device being connected
+      const btn = this.dom.btDeviceItems.querySelector(`[data-id="${info.id}"] .bt-device-item-connect`);
+      if (btn) {
+        btn.textContent = 'Connecting...';
+        btn.classList.add('connecting');
+        btn.disabled = true;
+      }
+    });
+
+    this._bluetooth.on('connected', (info) => {
+      this._renderBluetoothDevices(); // refresh list
     });
 
     this._bluetooth.on('code-received', (data) => {
-      this._onBluetoothCodeReceived(data.roomCode, data.device);
+      this._onBluetoothCodeReceived(data.roomCode, data.device, data.details);
     });
 
     this._bluetooth.on('code-generated', (data) => {
-      this._onBluetoothCodeReceived(data.roomCode, data.device);
+      this._onBluetoothCodeReceived(data.roomCode, data.device, data.details);
     });
 
     this._bluetooth.on('error', (data) => {
       this._toast('error', data.message);
-      this.dom.btScanAnim.style.display = 'none';
-      this.dom.btStatus.style.display = 'flex';
-      this.dom.btStatusText.textContent = data.message;
-      this.dom.btScanBtn.disabled = false;
+      this.dom.btScanBtn.classList.remove('scanning');
       this.dom.btScanBtnText.textContent = 'Try Again';
-    });
-
-    this._bluetooth.on('disconnected', () => {
-      // BLE disconnected — this is expected after pairing.
-      // The WebSocket/WebRTC connection takes over.
-      console.log('⚡ BLE disconnected (expected after pairing)');
+      this.dom.btScanAnim.style.display = 'none';
+      if (this.dom.btDeviceItems.children.length === 0) {
+        this.dom.btStatus.style.display = 'flex';
+        this.dom.btStatusText.textContent = 'Scan failed';
+      }
+      this._renderBluetoothDevices();
     });
   }
 
-  _openBluetoothModal() {
+  async _openBluetoothModal() {
     const isSupported = BluetoothPairing.isSupported();
 
-    // Reset modal state
     if (this.dom.btScanSection) this.dom.btScanSection.style.display = isSupported ? 'block' : 'none';
     if (this.dom.btUnsupported) this.dom.btUnsupported.style.display = isSupported ? 'none' : 'flex';
 
     if (!isSupported) {
-      const reason = BluetoothPairing.getUnsupportedReason();
-      if (this.dom.btUnsupportedReason) this.dom.btUnsupportedReason.textContent = reason;
+      if (this.dom.btUnsupportedReason) this.dom.btUnsupportedReason.textContent = BluetoothPairing.getUnsupportedReason();
     } else {
-      // Reset to initial state
-      if (this.dom.btStatus) this.dom.btStatus.style.display = 'flex';
-      if (this.dom.btStatusText) this.dom.btStatusText.textContent = 'Ready to scan for nearby devices';
-      if (this.dom.btScanAnim) this.dom.btScanAnim.style.display = 'none';
-      if (this.dom.btDeviceCard) this.dom.btDeviceCard.style.display = 'none';
-      if (this.dom.btScanBtn) this.dom.btScanBtn.disabled = false;
-      if (this.dom.btScanBtnText) this.dom.btScanBtnText.textContent = 'Scan for Devices';
-      if (this.dom.btSubtitle) this.dom.btSubtitle.textContent = 'Find and connect to a nearby Allowme device';
+      this.dom.btDeviceCard.style.display = 'none';
+      this.dom.btDeviceList.style.display = 'block';
+      this.dom.btScanAnim.style.display = 'none';
+      this.dom.btScanBtn.disabled = false;
+      this.dom.btScanBtnText.textContent = 'Scan for Devices';
+      this.dom.btSubtitle.textContent = 'Scan & connect to nearby devices';
+
+      // Fetch saved devices if supported
+      const saved = await this._bluetooth.getSavedDevices();
+      saved.forEach(d => {
+        if (!this._bluetooth._devices.find(ex => ex.id === d.id)) {
+          this._bluetooth._devices.push(d);
+        }
+      });
+      this._renderBluetoothDevices();
     }
 
     this._showModal('bluetoothModal');
   }
 
-  async _bluetoothScan() {
-    const result = await this._bluetooth.pairAndGetCode();
-    // Result is handled by the event listeners above
+  _renderBluetoothDevices() {
+    const devices = this._bluetooth.getDevices();
+    const container = this.dom.btDeviceItems;
+    container.innerHTML = '';
+
+    if (devices.length === 0) {
+      this.dom.btStatus.style.display = 'flex';
+      this.dom.btStatusText.textContent = 'No devices found yet';
+      return;
+    }
+
+    this.dom.btStatus.style.display = 'none';
+
+    devices.forEach(d => {
+      const isConnected = this._bluetooth._connectedDevice?.id === d.id;
+      const el = document.createElement('div');
+      el.className = `bt-device-item ${isConnected ? 'connected' : ''}`;
+      el.dataset.id = d.id;
+      
+      const icon = d.saved ? '💾' : '📱';
+      
+      let actionHtml = '';
+      if (isConnected) {
+        actionHtml = `<div class="bt-device-item-connected-badge"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Connected</div>`;
+      } else {
+        actionHtml = `<button class="bt-device-item-connect">Connect</button>`;
+      }
+
+      el.innerHTML = `
+        <div class="bt-device-item-icon">${icon}</div>
+        <div class="bt-device-item-info">
+          <div class="bt-device-item-name" title="${d.name}">${d.name}</div>
+          <div class="bt-device-item-id">${d.saved ? 'Saved Device' : 'Nearby'} · ${d.id.substring(0,8)}</div>
+          <div class="bt-device-item-signal">
+            <div class="bt-signal-bar active"></div>
+            <div class="bt-signal-bar active"></div>
+            <div class="bt-signal-bar ${d.saved ? '' : 'active'}"></div>
+            <div class="bt-signal-bar"></div>
+          </div>
+        </div>
+        ${actionHtml}
+      `;
+
+      if (!isConnected) {
+        const btn = el.querySelector('.bt-device-item-connect');
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this._bluetooth.connectToDevice(d);
+        });
+      }
+
+      container.appendChild(el);
+    });
   }
 
-  _onBluetoothCodeReceived(roomCode, deviceName) {
-    // Update modal UI
-    this.dom.btDeviceStatus.textContent = `Joining room ${roomCode}...`;
-    this.dom.btScanBtn.disabled = true;
-    this.dom.btScanBtnText.textContent = 'Connected!';
+  async _bluetoothScan() {
+    await this._bluetooth.scanOnce();
+  }
+
+  _onBluetoothCodeReceived(roomCode, deviceName, details) {
+    this.dom.btDeviceList.style.display = 'none';
+    this.dom.btDeviceCard.style.display = 'flex';
+    this.dom.btDeviceName.textContent = deviceName;
+    this.dom.btScanBtn.style.display = 'none';
     this.dom.btSubtitle.textContent = 'Paired! Connecting via WebRTC...';
+
+    if (details && details.battery !== undefined) {
+      this.dom.btDeviceBattery.style.display = 'flex';
+      this.dom.btBatteryLevel.textContent = `${details.battery}%`;
+    } else {
+      this.dom.btDeviceBattery.style.display = 'none';
+    }
 
     this._toast('success', `Paired with ${deviceName}! Joining room...`);
     this._vibrate([50, 50, 50]);
 
-    // Create or join the room via existing signaling
     this.signaling.send({ type: 'join-room', roomCode });
 
-    // Close modal after a brief delay so user sees the success state
     setTimeout(() => {
       this._hideModal('bluetoothModal');
-      this._bluetooth.disconnect(); // cleanup BLE
-    }, 1500);
+      this.dom.btScanBtn.style.display = 'flex';
+      this._bluetooth.disconnect(); 
+    }, 2000);
   }
 
   _updateQR(code) {
