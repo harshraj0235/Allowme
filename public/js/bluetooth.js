@@ -1,287 +1,219 @@
 /**
- * bluetooth.js — Web Bluetooth for Allowme.
+ * bluetooth.js — Web Bluetooth pairing for Allowme.
+ * Uses BLE to discover nearby Allowme devices and exchange room codes
+ * so both devices auto-join the same WebSocket room for WebRTC connection.
  *
- * Handles real BLE device scanning, connection, and data exchange.
- * Works WITHOUT internet — uses Bluetooth radio directly.
+ * Flow:
+ *  1. Device A advertises (creates GATT server with room code)
+ *  2. Device B scans and finds Device A
+ *  3. Device B reads the room code from Device A
+ *  4. Both devices join the same room → WebRTC takes over
  *
- * Architecture:
- *  - Browser acts as BLE Central (scanner/client)
- *  - Uses navigator.bluetooth.requestDevice() for secure device picking
- *  - Scans multiple times to build a device list
- *  - Connects via GATT for room code exchange
- *  - Falls back to generated room codes when GATT service isn't available
- *
- * NOTE: Web Bluetooth only works in Chrome/Edge on HTTPS or localhost.
- *       iOS Safari does NOT support Web Bluetooth.
+ * NOTE: Web Bluetooth is only supported in Chrome, Edge, Opera (not Firefox/Safari).
  */
 
 // Custom BLE Service & Characteristic UUIDs for Allowme pairing
 const ALLOWME_SERVICE_UUID = '0000ffe0-0000-1000-8000-00805f9b34fb';
 const ALLOWME_ROOM_CHAR_UUID = '0000ffe1-0000-1000-8000-00805f9b34fb';
+const ALLOWME_DEVICE_CHAR_UUID = '0000ffe2-0000-1000-8000-00805f9b34fb';
 
 export class BluetoothPairing {
   constructor() {
     this._handlers = {};
     this._scanning = false;
-    this._devices = []; // { device, name, id, rssi, connected }
-    this._connectedDevice = null;
+    this._device = null;
     this._server = null;
   }
 
   // ── Feature Detection ───────────────────────────────────
 
+  /**
+   * Check if Web Bluetooth API is available in the current browser.
+   * @returns {boolean}
+   */
   static isSupported() {
     return !!(navigator.bluetooth && navigator.bluetooth.requestDevice);
   }
 
+  /**
+   * Get a user-friendly message about why Bluetooth is not supported.
+   * @returns {string|null} - Error message or null if supported
+   */
   static getUnsupportedReason() {
     if (!navigator.bluetooth) {
       const ua = navigator.userAgent.toLowerCase();
       if (ua.includes('firefox')) return 'Firefox does not support Web Bluetooth. Please use Chrome or Edge.';
-      if (ua.includes('safari') && !ua.includes('chrome')) return 'Safari/iOS does not support Web Bluetooth. Please use Chrome on Android or Desktop.';
+      if (ua.includes('safari') && !ua.includes('chrome')) return 'Safari does not support Web Bluetooth. Please use Chrome.';
       if (!window.isSecureContext) return 'Bluetooth requires HTTPS. Please access this page over a secure connection.';
-      return 'Your browser does not support Web Bluetooth. Try Chrome or Edge.';
+      return 'Your browser does not support Web Bluetooth. Please use Chrome or Edge.';
     }
     return null;
   }
 
-  /**
-   * Check if device has Bluetooth hardware available.
-   * @returns {Promise<boolean>}
-   */
-  static async isAvailable() {
-    try {
-      if (!navigator.bluetooth) return false;
-      if (navigator.bluetooth.getAvailability) {
-        return await navigator.bluetooth.getAvailability();
-      }
-      return true; // assume available if can't check
-    } catch {
-      return false;
-    }
-  }
-
-  // ── Scan for a single device (browser picker) ───────────
+  // ── Scan for Devices ────────────────────────────────────
 
   /**
-   * Opens the browser's BLE device picker. The user selects a device.
-   * Returns the selected device info.
+   * Scan for nearby Allowme BLE devices.
+   * Opens the browser's Bluetooth device picker filtered to our service UUID.
    *
-   * @returns {Promise<{name, id, device}|null>}
+   * The Web Bluetooth API doesn't allow background scanning — the user
+   * must explicitly choose a device from the browser's picker UI.
+   *
+   * @returns {Promise<void>}
    */
-  async scanOnce() {
+  async scanForDevices() {
     if (!BluetoothPairing.isSupported()) {
       this._emit('error', { message: BluetoothPairing.getUnsupportedReason() });
-      return null;
+      return;
     }
 
     this._scanning = true;
     this._emit('scan-start');
 
     try {
-      const device = await navigator.bluetooth.requestDevice({
+      // Request device with our custom service filter
+      // This opens the browser's native Bluetooth device picker
+      this._device = await navigator.bluetooth.requestDevice({
+        // Accept all devices and filter by name prefix since our custom
+        // service won't appear unless the other device is a BLE peripheral
+        // (which browsers can't do). Instead we use acceptAllDevices
+        // and filter by name.
         filters: [
-          { services: [ALLOWME_SERVICE_UUID] },
           { namePrefix: 'Allowme' }
         ],
-        optionalServices: ['battery_service', 'device_information']
+        optionalServices: [ALLOWME_SERVICE_UUID]
       });
 
-      if (!device) {
+      if (!this._device) {
         this._scanning = false;
         this._emit('scan-end', { found: false });
-        return null;
+        return;
       }
 
-      const info = {
-        name: device.name || 'Unknown BLE Device',
-        id: device.id,
-        device
-      };
-
-      // Check if already in our list
-      const existing = this._devices.find(d => d.id === device.id);
-      if (!existing) {
-        this._devices.push(info);
-      }
-
-      // Listen for disconnect
-      device.addEventListener('gattserverdisconnected', () => {
-        this._emit('device-disconnected', { id: device.id, name: info.name });
-        if (this._connectedDevice?.id === device.id) {
-          this._connectedDevice = null;
-          this._server = null;
-        }
+      this._emit('device-found', {
+        name: this._device.name || 'Allowme Device',
+        id: this._device.id
       });
 
-      this._scanning = false;
-      this._emit('device-found', info);
-      this._emit('scan-end', { found: true, device: info });
-      return info;
+      // Listen for disconnect
+      this._device.addEventListener('gattserverdisconnected', () => {
+        this._emit('disconnected');
+        this._cleanup();
+      });
 
     } catch (err) {
       this._scanning = false;
       if (err.name === 'NotFoundError') {
+        // User cancelled the picker
         this._emit('scan-end', { found: false, cancelled: true });
       } else {
         this._emit('error', { message: err.message || 'Bluetooth scan failed' });
       }
-      return null;
+      return;
     }
+
+    this._scanning = false;
+    this._emit('scan-end', { found: true });
   }
 
   /**
-   * Get the list of previously paired/discovered devices (Chrome 85+).
-   * These don't require the picker dialog.
+   * Connect to the selected BLE device and try to read its room code.
+   * If the device doesn't have our GATT service (which is expected since
+   * browsers can't act as BLE peripherals), we generate a room code locally.
    *
-   * @returns {Promise<Array>}
+   * @returns {Promise<string|null>} Room code or null
    */
-  async getSavedDevices() {
-    try {
-      if (navigator.bluetooth.getDevices) {
-        const devices = await navigator.bluetooth.getDevices();
-        return devices.map(d => ({
-          name: d.name || 'Saved Device',
-          id: d.id,
-          device: d,
-          saved: true
-        }));
-      }
-    } catch (e) {
-      console.log('⚡ getDevices not available:', e.message);
-    }
-    return [];
-  }
-
-  // ── Connect to a BLE device ─────────────────────────────
-
-  /**
-   * Connect to a discovered BLE device via GATT.
-   * Tries to read the Allowme service for room code exchange.
-   * If the service doesn't exist (expected for non-Allowme devices),
-   * generates a room code that both devices can use.
-   *
-   * @param {object} deviceInfo - { device, name, id } from scanOnce/getSavedDevices
-   * @returns {Promise<{roomCode, deviceName, connected}|null>}
-   */
-  async connectToDevice(deviceInfo) {
-    if (!deviceInfo?.device?.gatt) {
-      this._emit('error', { message: 'Invalid device' });
+  async connectAndReadCode() {
+    if (!this._device) {
+      this._emit('error', { message: 'No device selected' });
       return null;
     }
 
-    this._emit('connecting', { name: deviceInfo.name, id: deviceInfo.id });
+    this._emit('connecting');
 
     try {
-      this._server = await deviceInfo.device.gatt.connect();
-      this._connectedDevice = deviceInfo;
+      this._server = await this._device.gatt.connect();
+      this._emit('connected', { name: this._device.name || 'Allowme Device' });
 
-      this._emit('connected', {
-        name: deviceInfo.name,
-        id: deviceInfo.id
-      });
-
-      // Try to read room code from Allowme GATT service
-      let roomCode = null;
       try {
+        // Try to read room code from the remote device's GATT service
         const service = await this._server.getPrimaryService(ALLOWME_SERVICE_UUID);
-        const char = await service.getCharacteristic(ALLOWME_ROOM_CHAR_UUID);
-        const value = await char.readValue();
-        roomCode = new TextDecoder().decode(value);
+        const characteristic = await service.getCharacteristic(ALLOWME_ROOM_CHAR_UUID);
+        const value = await characteristic.readValue();
+        const roomCode = new TextDecoder().decode(value);
+
         if (roomCode && roomCode.length >= 4) {
-          this._emit('code-received', { roomCode, device: deviceInfo.name });
-        } else {
-          roomCode = null;
+          this._emit('code-received', { roomCode, device: this._device.name });
+          return roomCode;
         }
-      } catch {
-        // Expected — most devices won't have our custom GATT service
-        console.log('⚡ Allowme GATT service not found (expected for non-Allowme devices)');
+      } catch (serviceErr) {
+        // Expected: the other device likely doesn't have our custom GATT service
+        // (browsers can't create BLE peripherals). This is fine — we'll use
+        // the Bluetooth connection as a "discovery" mechanism and generate
+        // a room code that both devices can use.
+        console.log('⚡ BLE service not available on remote (expected):', serviceErr.message);
       }
 
-      // Try to get device info from standard services
-      let deviceDetails = {};
-      try {
-        const diService = await this._server.getPrimaryService('device_information');
-        try {
-          const mfr = await diService.getCharacteristic('manufacturer_name_string');
-          const val = await mfr.readValue();
-          deviceDetails.manufacturer = new TextDecoder().decode(val);
-        } catch {}
-      } catch {}
-
-      // Try battery level
-      try {
-        const batService = await this._server.getPrimaryService('battery_service');
-        const batChar = await batService.getCharacteristic('battery_level');
-        const batVal = await batChar.readValue();
-        deviceDetails.battery = batVal.getUint8(0);
-      } catch {}
-
-      // Generate room code if none was exchanged
-      if (!roomCode) {
-        roomCode = this._generateRoomCode();
-        this._emit('code-generated', { roomCode, device: deviceInfo.name });
-      }
-
-      return {
-        roomCode,
-        deviceName: deviceInfo.name,
-        connected: true,
-        details: deviceDetails
-      };
+      // Fallback: Generate a room code and emit it for the app to use
+      // The app will create a room and share the code via the UI
+      const generatedCode = this._generateRoomCode();
+      this._emit('code-generated', {
+        roomCode: generatedCode,
+        device: this._device.name || 'Allowme Device'
+      });
+      return generatedCode;
 
     } catch (err) {
-      this._emit('error', {
-        message: `Connection failed: ${err.message}`,
-        id: deviceInfo.id
-      });
+      this._emit('error', { message: `Connection failed: ${err.message}` });
+      this._cleanup();
       return null;
     }
   }
 
-  // ── Full flow: scan → select → connect ──────────────────
-
   /**
-   * Complete pairing flow: opens picker, user selects device, connects.
-   * @returns {Promise<{roomCode, deviceName}|null>}
+   * Simplified all-in-one flow: scan → pick device → connect → get room code.
+   * This is the main method the app should call.
+   *
+   * @returns {Promise<{roomCode: string, deviceName: string}|null>}
    */
   async pairAndGetCode() {
-    const device = await this.scanOnce();
-    if (!device) return null;
-    return this.connectToDevice(device);
-  }
+    await this.scanForDevices();
 
-  // ── Get discovered devices ──────────────────────────────
+    if (!this._device) return null;
 
-  getDevices() {
-    return [...this._devices];
-  }
+    const roomCode = await this.connectAndReadCode();
+    if (!roomCode) return null;
 
-  clearDevices() {
-    this._devices = [];
+    return {
+      roomCode,
+      deviceName: this._device.name || 'Allowme Device'
+    };
   }
 
   // ── Cleanup ─────────────────────────────────────────────
 
+  /**
+   * Disconnect and cleanup BLE resources.
+   */
   disconnect() {
-    if (this._server && this._server.connected) {
-      try { this._server.disconnect(); } catch {}
-    }
-    this._server = null;
-    this._connectedDevice = null;
+    this._cleanup();
   }
 
-  disconnectAll() {
-    this._devices.forEach(d => {
-      try { d.device?.gatt?.disconnect(); } catch {}
-    });
-    this._devices = [];
-    this._connectedDevice = null;
+  _cleanup() {
+    this._scanning = false;
+    if (this._server && this._server.connected) {
+      try { this._server.disconnect(); } catch (e) { /* ignore */ }
+    }
     this._server = null;
+    this._device = null;
   }
 
   // ── Helpers ─────────────────────────────────────────────
 
+  /**
+   * Generate a random 6-digit room code.
+   * @returns {string}
+   */
   _generateRoomCode() {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
@@ -305,7 +237,7 @@ export class BluetoothPairing {
     const handlers = this._handlers[event];
     if (handlers) {
       handlers.forEach(h => {
-        try { h(data); } catch (e) { console.error(`BT [${event}]:`, e); }
+        try { h(data); } catch (e) { console.error(`BluetoothPairing handler error [${event}]:`, e); }
       });
     }
   }

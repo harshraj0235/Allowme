@@ -359,35 +359,6 @@ wss.on('connection', (ws, req) => {
         safeSend(ws, { type: 'room-created', roomCode });
         break;
       }
-
-      // ── Bluetooth pairing request (Device A → Device B) ────────
-      case 'bt-pair-request': {
-        const targetPeer = peers.get(msg.targetId);
-        if (targetPeer) {
-          safeSend(targetPeer.ws, {
-            type: 'bt-pair-request',
-            from: peerId,
-            deviceInfo: peers.get(peerId)?.deviceInfo,
-          });
-          console.log(`[BT] Pair request: ${peerId} → ${msg.targetId}`);
-        }
-        break;
-      }
-
-      // ── Bluetooth pairing response (Device B → Device A) ───────
-      case 'bt-pair-response': {
-        const requesterPeer = peers.get(msg.targetId);
-        if (requesterPeer) {
-          safeSend(requesterPeer.ws, {
-            type: 'bt-pair-response',
-            from: peerId,
-            accepted: msg.accepted,
-            deviceInfo: peers.get(peerId)?.deviceInfo,
-          });
-          console.log(`[BT] Pair response: ${peerId} → ${msg.targetId} (${msg.accepted ? 'ACCEPTED' : 'REJECTED'})`);
-        }
-        break;
-      }
     }
   });
 

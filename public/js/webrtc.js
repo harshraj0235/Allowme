@@ -27,7 +27,6 @@ export class PeerConnection {
     this._closed = false;
     this._makingOffer = false;  // Perfect negotiation flag
     this._isPolite = false;     // Set to true on responder side
-    this._ignoreNegotiationNeeded = false; // Suppress during manual createOffer
     this._iceRestartTimer = null;
     this._iceRestartAttempts = 0;
 
@@ -42,6 +41,8 @@ export class PeerConnection {
       iceCandidatePoolSize: 10,
     });
 
+
+
     // Emit ICE candidates as 'signal' events
     this.pc.onicecandidate = (event) => {
       if (event.candidate) {
@@ -49,16 +50,17 @@ export class PeerConnection {
       }
     };
 
-    // Perfect Negotiation: auto-renegotiate when tracks are added/removed
+    // Auto-renegotiate when tracks are added/removed (with perfect negotiation)
     this.pc.onnegotiationneeded = async () => {
-      if (this._ignoreNegotiationNeeded) return;
       try {
         this._makingOffer = true;
-        // Use setLocalDescription() with NO args — the browser will
-        // auto-create the correct SDP (offer/answer/rollback) and
-        // guarantee correct m-line ordering. This is the W3C recommended
-        // approach and eliminates the m-line mismatch error entirely.
-        await this.pc.setLocalDescription();
+
+        if (this.pc.signalingState !== 'stable') {
+          console.warn('⚡ Skipping offer: signaling state is', this.pc.signalingState);
+          return;
+        }
+        const offer = await this.pc.createOffer();
+        await this.pc.setLocalDescription(offer);
         this._emit('signal', { type: 'offer', sdp: this.pc.localDescription });
       } catch (e) {
         console.error('⚡ Renegotiation failed', e);
@@ -80,6 +82,7 @@ export class PeerConnection {
         this._startStatsMonitoring();
       }
       if (state === 'failed') {
+        // Attempt ICE restart before giving up
         if (this._iceRestartAttempts < 3) {
           console.log(`⚡ Connection failed, attempting ICE restart (${this._iceRestartAttempts + 1}/3)`);
           this._restartIce();
@@ -89,6 +92,7 @@ export class PeerConnection {
         }
       }
       if (state === 'disconnected') {
+        // Brief disconnects are normal (network switch). Wait before acting.
         this._iceRestartTimer = setTimeout(() => {
           if (this.pc && this.pc.connectionState === 'disconnected') {
             console.log('⚡ Still disconnected, attempting ICE restart');
@@ -119,6 +123,7 @@ export class PeerConnection {
     // Listen for remote video/audio tracks (screen sharing & calls)
     this.pc.ontrack = (event) => {
       console.log('⚡ Remote track received:', event.track.kind, event.track.id);
+      // Some browsers/renegotiations don't include event.streams — create one from the track
       const stream = (event.streams && event.streams[0])
         ? event.streams[0]
         : new MediaStream([event.track]);
@@ -132,6 +137,7 @@ export class PeerConnection {
 
     if (channel.readyState === 'open') {
       console.log('⚡ Data channel OPEN (already)');
+      // Use setTimeout to allow app.js to bind its events first
       setTimeout(() => this._emit('open'), 0);
     }
 
@@ -167,57 +173,41 @@ export class PeerConnection {
    */
   async createOffer() {
     try {
-      // Suppress onnegotiationneeded during manual offer creation
-      // to prevent double-offer from the data channel creation + createOffer
-      this._ignoreNegotiationNeeded = true;
-
       // Create data channel (initiator creates it)
       this.dataChannel = this.pc.createDataChannel('allowme-files', { ordered: true });
       this._setupDataChannel(this.dataChannel);
 
-      this._makingOffer = true;
-      // Use setLocalDescription() with NO args for safe SDP generation
-      await this.pc.setLocalDescription();
+      const offer = await this.pc.createOffer();
+      await this.pc.setLocalDescription(offer);
+
       this._emit('signal', { type: 'offer', sdp: this.pc.localDescription });
     } catch (e) {
       console.error('⚡ Failed to create offer:', e);
       this._emit('error', e);
-    } finally {
-      this._makingOffer = false;
-      this._ignoreNegotiationNeeded = false;
     }
   }
 
   /**
    * Handle an incoming signaling message (offer, answer, or ICE candidate).
-   * Implements the W3C "Perfect Negotiation" pattern with proper rollback.
    */
   async handleSignal(signal) {
     if (this._closed) return;
     try {
       if (signal.type === 'offer') {
-        // Perfect negotiation: detect and handle offer collision
+        // Perfect negotiation: handle offer collision
         const offerCollision = this._makingOffer || this.pc.signalingState !== 'stable';
-
-        if (offerCollision) {
-          if (!this._isPolite) {
-            // Impolite peer: ignore the incoming offer, our offer wins
-            console.warn('⚡ Ignoring colliding offer (impolite peer)');
-            return;
-          }
-          // Polite peer: rollback our own pending offer, accept theirs
-          console.log('⚡ Rolling back own offer to accept remote (polite peer)');
-          await this.pc.setLocalDescription({ type: 'rollback' });
+        if (offerCollision && !this._isPolite) {
+          console.warn('⚡ Ignoring colliding offer (impolite peer)');
+          return;
         }
-
         // Responder is the polite peer in perfect negotiation
         if (!this.dataChannel) this._isPolite = true;
-
         await this.pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
         await this._flushPendingCandidates();
 
-        // Use setLocalDescription() with no args for safe answer generation
-        await this.pc.setLocalDescription();
+        const answer = await this.pc.createAnswer();
+        await this.pc.setLocalDescription(answer);
+
         this._emit('signal', { type: 'answer', sdp: this.pc.localDescription });
 
       } else if (signal.type === 'answer') {
@@ -229,13 +219,10 @@ export class PeerConnection {
         }
 
       } else if (signal.type === 'ice-candidate') {
-        try {
-          await this.pc.addIceCandidate(signal.candidate ? new RTCIceCandidate(signal.candidate) : null);
-        } catch (e) {
-          // Ignore ICE candidate errors if we're not in a state to accept them
-          if (!this._ignoreNegotiationNeeded) {
-            console.warn('⚡ ICE candidate error (non-fatal):', e.message);
-          }
+        if (this.pc.remoteDescription) {
+          await this.pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+        } else {
+          this._pendingCandidates.push(signal.candidate);
         }
       }
     } catch (e) {
@@ -303,11 +290,12 @@ export class PeerConnection {
     this._iceRestartAttempts++;
     try {
       this._makingOffer = true;
-      // Use createOffer with iceRestart then setLocalDescription for restart
       const offer = await this.pc.createOffer({ iceRestart: true });
-      await this.pc.setLocalDescription(offer);
-      this._emit('signal', { type: 'offer', sdp: this.pc.localDescription });
-      console.log('⚡ ICE restart offer sent');
+      if (this.pc.signalingState === 'stable' || this.pc.signalingState === 'have-local-offer') {
+        await this.pc.setLocalDescription(offer);
+        this._emit('signal', { type: 'offer', sdp: this.pc.localDescription });
+        console.log('⚡ ICE restart offer sent');
+      }
     } catch (e) {
       console.error('⚡ ICE restart failed:', e);
     } finally {

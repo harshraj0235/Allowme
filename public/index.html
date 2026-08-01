@@ -384,126 +384,65 @@
 
 <!-- Bluetooth Modal -->
 <div id="bluetoothModal" class="modal-overlay">
-  <div class="modal-content glass-card" style="position:relative;max-width:420px;padding:24px 20px;">
+  <div class="modal-content glass-card" style="position:relative">
     <button id="bluetoothModalClose" class="modal-close">✕</button>
-
-    <!-- Header -->
-    <div class="bt-modal-header">
-      <div class="bt-modal-icon">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"/></svg>
-      </div>
-      <div>
-        <div class="modal-title" style="text-align:left;margin:0;">Bluetooth</div>
-        <div class="bt-modal-subtitle" id="btSubtitle">Scan &amp; connect to nearby devices</div>
-      </div>
+    <div class="modal-title">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle;margin-right:6px;"><polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"/></svg>
+      Bluetooth Pairing
     </div>
+    <div class="modal-subtitle" id="btSubtitle">Find and connect to a nearby Allowme device</div>
 
-    <!-- Unsupported Warning -->
+    <!-- Unsupported Warning (hidden by default) -->
     <div id="btUnsupported" class="bt-unsupported" style="display:none;">
       <div class="bt-unsupported-icon">⚠️</div>
       <div class="bt-unsupported-title">Bluetooth Not Available</div>
       <div id="btUnsupportedReason" class="bt-unsupported-reason">Your browser does not support Web Bluetooth.</div>
-      <div class="bt-unsupported-hint">Try using <strong>Chrome</strong> or <strong>Edge</strong> on Desktop or Android.</div>
+      <div class="bt-unsupported-hint">Try using <strong>Chrome</strong> or <strong>Edge</strong> on a desktop or Android device.</div>
     </div>
 
-    <!-- Scanning Section -->
+    <!-- Scanning Section (shown when supported) -->
     <div id="btScanSection" class="bt-scan-section">
+      <!-- Status Area -->
+      <div id="btStatus" class="bt-status">
+        <div class="bt-status-icon" id="btStatusIcon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.4;"><polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"/></svg>
+        </div>
+        <div id="btStatusText" class="bt-status-text">Ready to scan for nearby devices</div>
+      </div>
 
-      <!-- Scan Button -->
-      <button id="btScanBtn" class="bt-scan-btn-new">
-        <div class="bt-scan-btn-icon" id="btScanBtnIcon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"/></svg>
-        </div>
-        <div class="bt-scan-btn-content">
-          <span id="btScanBtnText" class="bt-scan-btn-label">Scan for Devices</span>
-          <span class="bt-scan-btn-hint">Tap to find nearby Bluetooth devices</span>
-        </div>
-        <div class="bt-scan-btn-arrow">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-        </div>
-      </button>
-
-      <!-- Device List -->
-      <div id="btDeviceList" class="bt-device-list">
-        <!-- Status: empty state -->
-        <div id="btStatus" class="bt-status-new">
-          <div class="bt-status-icon-wrap" id="btStatusIcon">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.25;"><polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"/></svg>
+      <!-- Scanning Animation -->
+      <div id="btScanAnim" class="bt-scan-anim" style="display:none;">
+        <div class="bt-scan-pulse">
+          <div class="bt-pulse-ring"></div>
+          <div class="bt-pulse-ring delay-1"></div>
+          <div class="bt-pulse-ring delay-2"></div>
+          <div class="bt-scan-center">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"/></svg>
           </div>
-          <div id="btStatusText" class="bt-status-text-new">No devices found yet</div>
-          <div class="bt-status-hint">Tap "Scan" to discover nearby Bluetooth devices</div>
-        </div>
-
-        <!-- Scanning Animation (inside list area) -->
-        <div id="btScanAnim" class="bt-scan-anim-inline" style="display:none;">
-          <div class="bt-scan-pulse-inline">
-            <div class="bt-pulse-ring"></div>
-            <div class="bt-pulse-ring delay-1"></div>
-            <div class="bt-pulse-ring delay-2"></div>
-            <div class="bt-scan-center">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"/></svg>
-            </div>
-          </div>
-          <div class="bt-scan-label">Select a device from the browser picker...</div>
-        </div>
-
-        <!-- Discovered devices go here -->
-        <div id="btDeviceItems" class="bt-device-items"></div>
-      </div>
-
-      <!-- Connected Device Card (shown after connecting) -->
-      <div id="btDeviceCard" class="bt-connected-card" style="display:none;">
-        <div class="bt-connected-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-        </div>
-        <div class="bt-connected-info">
-          <div id="btDeviceName" class="bt-connected-name">Device</div>
-          <div id="btDeviceStatus" class="bt-connected-status">Connected</div>
-        </div>
-        <div id="btDeviceBattery" class="bt-device-battery" style="display:none;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="6" width="18" height="12" rx="2"/><line x1="23" y1="10" x2="23" y2="14"/></svg>
-          <span id="btBatteryLevel">—</span>
         </div>
       </div>
 
-      <!-- Hint -->
-      <div class="bt-hint-new">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-        Works offline — no internet needed. Both devices must have Bluetooth on.
+      <!-- Device Found Card -->
+      <div id="btDeviceCard" class="bt-device-card" style="display:none;">
+        <div class="bt-device-icon">📱</div>
+        <div class="bt-device-info">
+          <div id="btDeviceName" class="bt-device-name">Device</div>
+          <div id="btDeviceStatus" class="bt-device-status">Connected via Bluetooth</div>
+        </div>
+        <div class="bt-device-check">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
       </div>
-    </div>
-  </div>
-</div>
 
-<!-- Bluetooth Pairing Request Notification -->
-<div id="btPairNotification" class="bt-pair-notification">
-  <div class="bt-pair-card glass-card">
-    <div class="bt-pair-pulse-ring"></div>
-    <div class="bt-pair-header">
-      <div class="bt-pair-icon">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"/></svg>
-      </div>
-      <div class="bt-pair-title">Bluetooth Pairing Request</div>
-    </div>
-    <div class="bt-pair-device-info">
-      <div class="bt-pair-device-emoji" id="btPairDeviceEmoji">🖥️</div>
-      <div>
-        <div class="bt-pair-device-name" id="btPairDeviceName">Unknown Device</div>
-        <div class="bt-pair-device-detail" id="btPairDeviceDetail">wants to connect with you</div>
-      </div>
-    </div>
-    <div class="bt-pair-timer">
-      <div class="bt-pair-timer-bar" id="btPairTimerBar"></div>
-    </div>
-    <div class="bt-pair-actions">
-      <button id="btPairRejectBtn" class="bt-pair-btn reject">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        Reject
+      <!-- Action Button -->
+      <button id="btScanBtn" class="bt-scan-btn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"/></svg>
+        <span id="btScanBtnText">Scan for Devices</span>
       </button>
-      <button id="btPairAcceptBtn" class="bt-pair-btn accept">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-        Accept
-      </button>
+
+      <div class="bt-hint">
+        Make sure the other device also has Allowme open with Bluetooth enabled
+      </div>
     </div>
   </div>
 </div>
